@@ -25,6 +25,8 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <limits.h>
+#include <inaccel/coral.h>
 #include <emmintrin.h>
 #include "ksw.h"
 
@@ -34,6 +36,10 @@
 #else
 #define LIKELY(x) (x)
 #define UNLIKELY(x) (x)
+#endif
+
+#ifndef BLOCK_WIDTH
+#define BLOCK_WIDTH 400
 #endif
 
 const kswr_t g_defr = { 0, -1, -1, -1, -1, -1, -1 };
@@ -327,7 +333,7 @@ static void revseq(int l, uint8_t *s)
 		t = s[i], s[i] = s[l - 1 - i], s[l - 1 - i] = t;
 }
 
-kswr_t ksw_align(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int xtra, kswq_t **qry)
+kswr_t ksw_align_ref(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int xtra, kswq_t **qry)
 {
 	int size;
 	kswq_t *q;
@@ -349,6 +355,186 @@ kswr_t ksw_align(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, con
 	if (r.score == rr.score)
 		r.tb = r.te - rr.te, r.qb = r.qe - rr.qe;
 	return r;
+}
+
+/***********************
+*** InAccel SW align ***
+************************/
+
+kswr_t sw_align(char *a, int m, char *b, int nbb, int table_n, int n, int scoreStop, int match, int mismatch, int open_gap, int extend_gap)
+{
+	kswr_t r;
+
+	r.score = -1;
+
+	int *score = (int *) cube_alloc(5 * sizeof(int));
+	if (!score)
+		return r;
+	int *prev_maxRow = (int *) cube_alloc(m * sizeof(int));
+	if (!prev_maxRow)
+		return r;
+	int *next_maxRow = (int *) cube_alloc(m * sizeof(int));
+	if (!next_maxRow)
+		return r;
+	int *prev_lastCol = (int *) cube_alloc(m * sizeof(int));
+	if (!prev_lastCol)
+		return r;
+	int *next_lastCol = (int *) cube_alloc(m * sizeof(int));
+	if (!next_lastCol)
+		return r;
+	int *score2T = (int *) cube_alloc(table_n * sizeof(int));
+	if (!score2T)
+		return r;
+	int *te2T = (int *) cube_alloc(table_n * sizeof(int));
+	if (!te2T)
+		return r;
+
+	int open_extend_gap = open_gap + extend_gap;
+
+	request acc = request_create("com.inaccel.klib.sw.align");
+	if (!acc)
+		return r;
+
+	request_arg(acc, 0, 0, a);
+	request_arg(acc, 1, sizeof(int), &m);
+	request_arg(acc, 2, 0, b);
+	request_arg(acc, 3, sizeof(int), &nbb);
+	request_arg(acc, 4, sizeof(int), &open_extend_gap);
+	request_arg(acc, 5, sizeof(int), &extend_gap);
+	request_arg(acc, 6, sizeof(int), &match);
+	request_arg(acc, 7, sizeof(int), &mismatch);
+	request_arg(acc, 8, 0, prev_lastCol);
+	request_arg(acc, 9, 0, next_lastCol);
+	request_arg(acc, 10, 0, prev_maxRow);
+	request_arg(acc, 11, 0, next_maxRow);
+	request_arg(acc, 12, 0, score);
+	request_arg(acc, 13, 0, score2T);
+	request_arg(acc, 14, 0, te2T);
+	request_arg(acc, 15, sizeof(int), &scoreStop);
+
+	session id = inaccel_submit(acc);
+	if (!id)
+		return r;
+
+	if (inaccel_wait(id))
+		return r;
+
+	r.score = score[0];
+	r.te = score[1];
+	r.qe = score[2];
+	r.score2 = score[3];
+	r.te2 = score[4];
+	r.tb = -1;
+	r.qb = -1;
+
+	request_free(acc);
+
+	cube_free(score);
+	cube_free(prev_maxRow);
+	cube_free(next_maxRow);
+	cube_free(prev_lastCol);
+	cube_free(next_lastCol);
+	cube_free(score2T);
+	cube_free(te2T);
+
+	return r;
+}
+
+kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int xtra, kswq_t **qry)
+{
+	kswr_t r, rr;
+
+	r.score = -1;
+	rr.score = -1;
+
+	int ext_n = (qlen / BLOCK_WIDTH + 1) * BLOCK_WIDTH;
+	int nbb = ext_n / BLOCK_WIDTH;
+
+	uint8_t *target_buf = (uint8_t *) cube_alloc(tlen * sizeof(uint8_t));
+	if (!target_buf)
+		return r;
+	uint8_t *query_buf = (uint8_t *) cube_alloc(ext_n * sizeof(uint8_t));
+	if (!query_buf)
+		return r;
+
+	for (int i = 0; i < tlen; i++){
+		target_buf[i] = target[i];
+	}
+	for (int i = 0; i < qlen; i++){
+		query_buf[i] = query[i];
+	}
+
+	r = sw_align(target_buf, tlen, query_buf, nbb, tlen, qlen, INT_MAX, mat[0], -mat[1], gapo, gape);
+	if (r.score < 0) {
+		cube_free(target_buf);
+		cube_free(query_buf);
+
+		return r;
+	}
+
+	if ((xtra & KSW_XSUBO) > 0 && r.score2 < (xtra & 0xffff)) {
+		r.score2 = -1;
+		r.te2 = -1;
+	}
+
+	if ((xtra & KSW_XSTART) == 0) {
+		cube_free(target_buf);
+		cube_free(query_buf);
+
+		return r;
+	}
+
+	if (xtra & KSW_XBYTE) {
+		if (r.score > 255) {
+			r.score = 255;
+			r.te = -1;
+			r.qe = -1;
+			r.score2 = -1;
+			r.te2 = -1;
+			r.tb = -1;
+			r.qb = -1;
+
+			cube_free(target_buf);
+			cube_free(query_buf);
+
+			return r;
+		}
+	}
+
+	revseq(r.te + 1, target_buf);
+	revseq(r.qe + 1, query_buf);
+
+	cube_rename(target_buf);
+	cube_rename(query_buf);
+
+	rr = sw_align(target_buf, tlen, query_buf, nbb, tlen, qlen, r.score, mat[0], -mat[1], gapo, gape);
+	if (rr.score < 0) {
+		cube_free(target_buf);
+		cube_free(query_buf);
+
+		return r;
+	}
+
+	r.tb = r.te - rr.te;
+	r.qb = r.qe - rr.qe;
+
+	cube_free(target_buf);
+	cube_free(query_buf);
+
+	return r;
+}
+
+kswr_t ksw_align(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int xtra, kswq_t **qry)
+{
+	if (!(qry && *qry)) {
+		kswr_t r = ksw_align_inaccel(qlen, query, tlen, target, m, mat, gapo, gape, xtra, qry);
+		if (r.score < 0) {
+			r = ksw_align_ref(qlen, query, tlen, target, m, mat, gapo, gape, xtra, qry);
+		}
+		return r;
+	} else {
+		return ksw_align_ref(qlen, query, tlen, target, m, mat, gapo, gape, xtra, qry);
+	}
 }
 
 /********************
