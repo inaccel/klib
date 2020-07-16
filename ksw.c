@@ -749,7 +749,7 @@ unsigned char seq_nt4_table[256] = {
 
 int main(int argc, char *argv[])
 {
-	int c, sa = 1, sb = 3, i, j, k, forward_only = 0, max_rseq = 0;
+	int c, sa = 1, sb = 3, i, j, k, forward_only = 0, klib = 0, max_rseq = 0;
 	int8_t mat[25];
 	int gapo = 5, gape = 2, minsc = 0, xtra = KSW_XSTART;
 	uint8_t *rseq = 0;
@@ -757,7 +757,7 @@ int main(int argc, char *argv[])
 	kseq_t *kst, *ksq;
 
 	// parse command line
-	while ((c = getopt(argc, argv, "a:b:q:r:ft:1")) >= 0) {
+	while ((c = getopt(argc, argv, "a:b:q:r:fkt:1")) >= 0) {
 		switch (c) {
 			case 'a': sa = atoi(optarg); break;
 			case 'b': sb = atoi(optarg); break;
@@ -765,11 +765,12 @@ int main(int argc, char *argv[])
 			case 'r': gape = atoi(optarg); break;
 			case 't': minsc = atoi(optarg); break;
 			case 'f': forward_only = 1; break;
+			case 'k': klib = 1; break;
 			case '1': xtra |= KSW_XBYTE; break;
 		}
 	}
 	if (optind + 2 > argc) {
-		fprintf(stderr, "Usage: ksw [-1] [-f] [-a%d] [-b%d] [-q%d] [-r%d] [-t%d] <target.fa> <query.fa>\n", sa, sb, gapo, gape, minsc);
+		fprintf(stderr, "Usage: ksw [-1] [-f] [-k] [-a%d] [-b%d] [-q%d] [-r%d] [-t%d] <target.fa> <query.fa>\n", sa, sb, gapo, gape, minsc);
 		return 1;
 	}
 	if (minsc > 0xffff) minsc = 0xffff;
@@ -800,11 +801,19 @@ int main(int argc, char *argv[])
 		gzrewind(fpt); kseq_rewind(kst);
 		while (kseq_read(kst) > 0) {
 			for (i = 0; i < (int)kst->seq.l; ++i) kst->seq.s[i] = seq_nt4_table[(int)kst->seq.s[i]];
-			r = ksw_align(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[0]);
+			if (klib) {
+				r = ksw_align_ref(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[0]);
+			} else {
+				r = ksw_align(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[0]);
+			}
 			if (r.score >= minsc)
 				printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", kst->name.s, r.tb, r.te+1, ksq->name.s, r.qb, r.qe+1, r.score, r.score2, r.te2);
 			if (rseq) {
-				r = ksw_align(ksq->seq.l, rseq, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[1]);
+				if (klib) {
+					r = ksw_align_ref(ksq->seq.l, rseq, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[1]);
+				} else {
+					r = ksw_align(ksq->seq.l, rseq, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[1]);
+				}
 				if (r.score >= minsc)
 					printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", kst->name.s, r.tb, r.te+1, ksq->name.s, (int)ksq->seq.l - r.qb, (int)ksq->seq.l - 1 - r.qe, r.score, r.score2, r.te2);
 			}
