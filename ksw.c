@@ -39,7 +39,7 @@
 #endif
 
 #ifndef BLOCK_WIDTH
-#define BLOCK_WIDTH 400
+#define BLOCK_WIDTH 512
 #endif
 
 const kswr_t g_defr = { 0, -1, -1, -1, -1, -1, -1 };
@@ -447,8 +447,13 @@ kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, in
 	r.score = -1;
 	rr.score = -1;
 
-	int ext_n = (qlen / BLOCK_WIDTH + 1) * BLOCK_WIDTH;
-	int nbb = ext_n / BLOCK_WIDTH;
+	int block_width = BLOCK_WIDTH;
+	char *env = getenv("BLOCK_WIDTH");
+	if (env)
+		block_width = atoi(env);
+
+	int ext_n = (qlen / block_width + 1) * block_width;
+	int nbb = ext_n / block_width;
 
 	uint8_t *target_buf = (uint8_t *) cube_alloc(tlen * sizeof(uint8_t));
 	if (!target_buf)
