@@ -463,8 +463,11 @@ kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, in
 	for (int i = 0; i < qlen; i++){
 		query_buf[i] = query[i];
 	}
+	for (int i = qlen; i < ext_n; i++){
+		query_buf[i] = (uint8_t) 'Z';
+	}
 
-	r = sw_align(target_buf, tlen, query_buf, nbb, tlen, qlen, INT_MAX, mat[0], -mat[1], gapo, gape);
+	r = sw_align(target_buf, tlen, query_buf, nbb, tlen * nbb / 2, qlen, INT_MAX, mat[0], -mat[1], gapo, gape);
 	if (r.score < 0) {
 		cube_free(target_buf);
 		cube_free(query_buf);
@@ -507,7 +510,7 @@ kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, in
 	cube_rename(target_buf);
 	cube_rename(query_buf);
 
-	rr = sw_align(target_buf, tlen, query_buf, nbb, tlen, qlen, r.score, mat[0], -mat[1], gapo, gape);
+	rr = sw_align(target_buf, tlen, query_buf, nbb, tlen * nbb / 2, qlen, r.score, mat[0], -mat[1], gapo, gape);
 	if (rr.score < 0) {
 		cube_free(target_buf);
 		cube_free(query_buf);
