@@ -38,10 +38,6 @@
 #define UNLIKELY(x) (x)
 #endif
 
-#ifndef BLOCK_WIDTH
-#define BLOCK_WIDTH 512
-#endif
-
 const kswr_t g_defr = { 0, -1, -1, -1, -1, -1, -1 };
 
 struct _kswq_t {
@@ -361,7 +357,7 @@ kswr_t ksw_align_ref(int qlen, uint8_t *query, int tlen, uint8_t *target, int m,
 *** InAccel SW align ***
 ************************/
 
-kswr_t sw_align(char *a, int m, char *b, int nbb, int table_n, int n, int scoreStop, int match, int mismatch, int open_gap, int extend_gap)
+kswr_t sw_align(char *a, int m, char *b, int n, int table_n, int scoreStop, int match, int mismatch, int open_gap, int extend_gap)
 {
 	kswr_t r;
 
@@ -398,7 +394,7 @@ kswr_t sw_align(char *a, int m, char *b, int nbb, int table_n, int n, int scoreS
 	request_arg(acc, 0, 0, a);
 	request_arg(acc, 1, sizeof(int), &m);
 	request_arg(acc, 2, 0, b);
-	request_arg(acc, 3, sizeof(int), &nbb);
+	request_arg(acc, 3, sizeof(int), &n);
 	request_arg(acc, 4, sizeof(int), &open_extend_gap);
 	request_arg(acc, 5, sizeof(int), &extend_gap);
 	request_arg(acc, 6, sizeof(int), &match);
@@ -442,19 +438,13 @@ kswr_t sw_align(char *a, int m, char *b, int nbb, int table_n, int n, int scoreS
 
 kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int xtra, kswq_t **qry)
 {
+	int i;
 	kswr_t r, rr;
 
 	r.score = -1;
 	rr.score = -1;
 
-	int block_width = BLOCK_WIDTH;
-	char *env = getenv("BLOCK_WIDTH");
-	if (env)
-		block_width = atoi(env);
-
-	int ext_n = (qlen / block_width + 1) * block_width;
-	int max_scores2 = (tlen > ext_n) ? tlen : ext_n;
-	int nbb = ext_n / block_width;
+	int ext_n = (qlen / 64 + 1) * 64;
 
 	uint8_t *target_buf = (uint8_t *) cube_alloc(tlen * sizeof(uint8_t));
 	if (!target_buf)
@@ -463,17 +453,19 @@ kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, in
 	if (!query_buf)
 		return r;
 
-	for (int i = 0; i < tlen; i++){
+	for (i = 0; i < tlen; i++){
 		target_buf[i] = target[i];
 	}
-	for (int i = 0; i < qlen; i++){
+	for (i = 0; i < qlen; i++){
 		query_buf[i] = query[i];
 	}
-	for (int i = qlen; i < ext_n; i++){
+	for (i = qlen; i < ext_n; i++){
 		query_buf[i] = (uint8_t) 'Z';
 	}
 
-	r = sw_align(target_buf, tlen, query_buf, nbb, max_scores2, qlen, INT_MAX, mat[0], -mat[1], gapo, gape);
+	int max_scores2 = (tlen > ext_n) ? tlen : ext_n;
+
+	r = sw_align(target_buf, tlen, query_buf, qlen, max_scores2, INT_MAX, mat[0], -mat[1], gapo, gape);
 	if (r.score < 0) {
 		cube_free(target_buf);
 		cube_free(query_buf);
@@ -516,7 +508,7 @@ kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, in
 	cube_rename(target_buf);
 	cube_rename(query_buf);
 
-	rr = sw_align(target_buf, tlen, query_buf, nbb, max_scores2, qlen, r.score, mat[0], -mat[1], gapo, gape);
+	rr = sw_align(target_buf, tlen, query_buf, qlen, max_scores2, r.score, mat[0], -mat[1], gapo, gape);
 	if (rr.score < 0) {
 		cube_free(target_buf);
 		cube_free(query_buf);
