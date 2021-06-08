@@ -363,57 +363,330 @@ kswr_t sw_align(char *a, int m, char *b, int n, int table_n, int scoreStop, int 
 
 	r.score = -1;
 
-	int *score = (int *) cube_alloc(5 * sizeof(int));
-	if (!score)
+	int *score = (int *) inaccel_alloc(5 * sizeof(int));
+	if (!score) {
 		return r;
-	int *prev_maxRow = (int *) cube_alloc(m * sizeof(int));
-	if (!prev_maxRow)
+	}
+	int *prev_maxRow = (int *) inaccel_alloc(m * sizeof(int));
+	if (!prev_maxRow) {
+		inaccel_free(score);
+
 		return r;
-	int *next_maxRow = (int *) cube_alloc(m * sizeof(int));
-	if (!next_maxRow)
+	}
+	int *next_maxRow = (int *) inaccel_alloc(m * sizeof(int));
+	if (!next_maxRow) {
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+
 		return r;
-	int *prev_lastCol = (int *) cube_alloc(m * sizeof(int));
-	if (!prev_lastCol)
+	}
+	int *prev_lastCol = (int *) inaccel_alloc(m * sizeof(int));
+	if (!prev_lastCol) {
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+
 		return r;
-	int *next_lastCol = (int *) cube_alloc(m * sizeof(int));
-	if (!next_lastCol)
+	}
+	int *next_lastCol = (int *) inaccel_alloc(m * sizeof(int));
+	if (!next_lastCol) {
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+
 		return r;
-	int *score2T = (int *) cube_alloc(table_n * sizeof(int));
-	if (!score2T)
+	}
+	int *score2T = (int *) inaccel_alloc(table_n * sizeof(int));
+	if (!score2T) {
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+
 		return r;
-	int *te2T = (int *) cube_alloc(table_n * sizeof(int));
-	if (!te2T)
+	}
+	int *te2T = (int *) inaccel_alloc(table_n * sizeof(int));
+	if (!te2T) {
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+
 		return r;
+	}
 
 	int open_extend_gap = open_gap + extend_gap;
 
-	request acc = request_create("com.inaccel.klib.sw.align");
-	if (!acc)
-		return r;
+	inaccel_request request = inaccel_request_create("com.inaccel.klib.sw.align");
+	if (!request) {
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
 
-	request_arg(acc, 0, 0, a);
-	request_arg(acc, 1, sizeof(int), &m);
-	request_arg(acc, 2, 0, b);
-	request_arg(acc, 3, sizeof(int), &n);
-	request_arg(acc, 4, sizeof(int), &open_extend_gap);
-	request_arg(acc, 5, sizeof(int), &extend_gap);
-	request_arg(acc, 6, sizeof(int), &match);
-	request_arg(acc, 7, sizeof(int), &mismatch);
-	request_arg(acc, 8, 0, prev_lastCol);
-	request_arg(acc, 9, 0, next_lastCol);
-	request_arg(acc, 10, 0, prev_maxRow);
-	request_arg(acc, 11, 0, next_maxRow);
-	request_arg(acc, 12, 0, score);
-	request_arg(acc, 13, 0, score2T);
-	request_arg(acc, 14, 0, te2T);
-	request_arg(acc, 15, sizeof(int), &scoreStop);
-
-	session id = inaccel_submit(acc);
-	if (!id)
 		return r;
+	}
 
-	if (inaccel_wait(id))
+	if (inaccel_request_arg_array(request, m * sizeof(uint8_t), a, 0)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
 		return r;
+	}
+	if (inaccel_request_arg_scalar(request, sizeof(int), &m, 1)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_array(request, (n / 64 + 1) * 64 * sizeof(uint8_t), b, 2)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_scalar(request, sizeof(int), &n, 3)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_scalar(request, sizeof(int), &open_extend_gap, 4)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_scalar(request, sizeof(int), &extend_gap, 5)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_scalar(request, sizeof(int), &match, 6)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_scalar(request, sizeof(int), &mismatch, 7)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_array(request, m * sizeof(int), prev_lastCol, 8)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_array(request, m * sizeof(int), next_lastCol, 9)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_array(request, m * sizeof(int), prev_maxRow, 10)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_array(request, m * sizeof(int), next_maxRow, 11)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_array(request, 5 * sizeof(int), score, 12)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_array(request, table_n * sizeof(int), score2T, 13)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_array(request, table_n * sizeof(int), te2T, 14)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+	if (inaccel_request_arg_scalar(request, sizeof(int), &scoreStop, 15)) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+
+	inaccel_response response = inaccel_response_create();
+	if (!response) {
+		inaccel_request_release(request);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+
+	if (inaccel_submit(request, response)) {
+		inaccel_request_release(request);
+		inaccel_response_release(response);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
+
+	if (inaccel_response_wait(response)) {
+		inaccel_request_release(request);
+		inaccel_response_release(response);
+
+		inaccel_free(score);
+		inaccel_free(prev_maxRow);
+		inaccel_free(next_maxRow);
+		inaccel_free(prev_lastCol);
+		inaccel_free(next_lastCol);
+		inaccel_free(score2T);
+		inaccel_free(te2T);
+
+		return r;
+	}
 
 	r.score = score[0];
 	r.te = score[1];
@@ -423,15 +696,16 @@ kswr_t sw_align(char *a, int m, char *b, int n, int table_n, int scoreStop, int 
 	r.tb = -1;
 	r.qb = -1;
 
-	request_free(acc);
+	inaccel_request_release(request);
+	inaccel_response_release(response);
 
-	cube_free(score);
-	cube_free(prev_maxRow);
-	cube_free(next_maxRow);
-	cube_free(prev_lastCol);
-	cube_free(next_lastCol);
-	cube_free(score2T);
-	cube_free(te2T);
+	inaccel_free(score);
+	inaccel_free(prev_maxRow);
+	inaccel_free(next_maxRow);
+	inaccel_free(prev_lastCol);
+	inaccel_free(next_lastCol);
+	inaccel_free(score2T);
+	inaccel_free(te2T);
 
 	return r;
 }
@@ -446,12 +720,16 @@ kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, in
 
 	int ext_n = (qlen / 64 + 1) * 64;
 
-	uint8_t *target_buf = (uint8_t *) cube_alloc(tlen * sizeof(uint8_t));
-	if (!target_buf)
+	uint8_t *target_buf = (uint8_t *) inaccel_alloc(tlen * sizeof(uint8_t));
+	if (!target_buf) {
 		return r;
-	uint8_t *query_buf = (uint8_t *) cube_alloc(ext_n * sizeof(uint8_t));
-	if (!query_buf)
+	}
+	uint8_t *query_buf = (uint8_t *) inaccel_alloc(ext_n * sizeof(uint8_t));
+	if (!query_buf) {
+		inaccel_free(query_buf);
+
 		return r;
+	}
 
 	for (i = 0; i < tlen; i++){
 		target_buf[i] = target[i];
@@ -467,8 +745,8 @@ kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, in
 
 	r = sw_align(target_buf, tlen, query_buf, qlen, max_scores2, INT_MAX, mat[0], -mat[1], gapo, gape);
 	if (r.score < 0) {
-		cube_free(target_buf);
-		cube_free(query_buf);
+		inaccel_free(target_buf);
+		inaccel_free(query_buf);
 
 		return r;
 	}
@@ -479,8 +757,8 @@ kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, in
 	}
 
 	if ((xtra & KSW_XSTART) == 0) {
-		cube_free(target_buf);
-		cube_free(query_buf);
+		inaccel_free(target_buf);
+		inaccel_free(query_buf);
 
 		return r;
 	}
@@ -495,8 +773,8 @@ kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, in
 			r.tb = -1;
 			r.qb = -1;
 
-			cube_free(target_buf);
-			cube_free(query_buf);
+			inaccel_free(target_buf);
+			inaccel_free(query_buf);
 
 			return r;
 		}
@@ -505,13 +783,10 @@ kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, in
 	revseq(r.te + 1, target_buf);
 	revseq(r.qe + 1, query_buf);
 
-	cube_rename(target_buf);
-	cube_rename(query_buf);
-
 	rr = sw_align(target_buf, tlen, query_buf, qlen, max_scores2, r.score, mat[0], -mat[1], gapo, gape);
 	if (rr.score < 0) {
-		cube_free(target_buf);
-		cube_free(query_buf);
+		inaccel_free(target_buf);
+		inaccel_free(query_buf);
 
 		return r;
 	}
@@ -519,8 +794,8 @@ kswr_t ksw_align_inaccel(int qlen, uint8_t *query, int tlen, uint8_t *target, in
 	r.tb = r.te - rr.te;
 	r.qb = r.qe - rr.qe;
 
-	cube_free(target_buf);
-	cube_free(query_buf);
+	inaccel_free(target_buf);
+	inaccel_free(query_buf);
 
 	return r;
 }
